@@ -1,29 +1,45 @@
-# Adam Beardsley
-# starting from from adafruit example
-# https://learn.adafruit.com/welcome-to-circuitpython/creating-and-editing-code
-#
+import time
+import array
+import math
 import board
 import digitalio
-import time
 
-led = digitalio.DigitalInOut(board.LED)
-led.direction = digitalio.Direction.OUTPUT
+try:
+    from audiocore import RawSample
+except ImportError:
+    from audioio import RawSample
 
-ramp_time = 3  # Time to ramp up, in seconds
-period = 0.01  # Time per cycle, in seconds
-step = period / ramp_time  # how much to increment the brightness each cycle
+try:
+    from audioio import AudioOut
+except ImportError:
+    try:
+        from audiopwmio import PWMAudioOut as AudioOut
+    except ImportError:
+        pass  # not always supported by every board!
 
-while True:
-    brightness = 1  # Start off
-    while brightness > 0:
-        T_on = brightness * period
-        T_off = period - T_on
-        led.value = True
-        time.sleep(T_on)
-        led.value = False
-        time.sleep(T_off)
-        brightness -= step
+FREQUENCY = 440  # 440 Hz middle 'A'
+SAMPLERATE = 8000  # 8000 samples/second, recommended!
 
-# Convince yourself the expression for step (line 14) is correct
-# How can you *test* that step is correct?
-# Can you reverse the program (start bright, get dim)
+# Generate one period of sine wav.
+length = SAMPLERATE // FREQUENCY
+sine_wave = array.array("H", [0] * length)
+for i in range(length):
+    sine_wave[i] = int(math.sin(math.pi * 2 * i / length) * (2 ** 15) + 2 ** 15)
+
+# Enable the speaker
+speaker_enable = digitalio.DigitalInOut(board.SPEAKER_ENABLE)
+speaker_enable.direction = digitalio.Direction.OUTPUT
+speaker_enable.value = True
+
+audio = AudioOut(board.SPEAKER)
+sine_wave_sample = RawSample(sine_wave)
+
+# A single sine wave sample is hundredths of a second long. If you set loop=False, it will play
+# a single instance of the sample (a quick burst of sound) and then silence for the rest of the
+# duration of the time.sleep(). If loop=True, it will play the single instance of the sample
+# continuously for the duration of the time.sleep().
+audio.play(sine_wave_sample, loop=True)  # Play the single sine_wave sample continuously...
+time.sleep(1)  # for the duration of the sleep (in seconds)
+audio.stop()  # and then stop.
+
+
